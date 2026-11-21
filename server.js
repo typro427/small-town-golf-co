@@ -516,19 +516,21 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));
 app.get(['/admin', '/admin/'], (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.set('X-Robots-Tag', 'noindex, nofollow');
-  res.sendFile(path.join(__dirname, 'admin', 'index.html'));
+  res.sendFile(path.join(__dirname, 'admin.html'));
 });
 app.get('/healthz', async (req, res) => {
   try { await pool.query('SELECT 1'); res.json({ ok: true }); } catch { res.status(503).json({ ok: false }); }
 });
-app.use(express.static(path.join(__dirname, 'public'), {
-  extensions: ['html'],
-  setHeaders(res, file) {
-    if (/\.(png|jpg|jpeg|webp|svg|ico)$/.test(file)) res.set('Cache-Control', 'public, max-age=604800');
-    else res.set('Cache-Control', 'no-cache');
-  },
-}));
-app.use((req, res) => res.status(404).sendFile(path.join(__dirname, 'public', 'index.html')));
+// Only these files are public. Everything else in the project (server code, settings) is never served.
+const PUBLIC_FILES = new Set(['index.html', 'og-image.jpg', 'favicon.png', 'apple-touch-icon.png', 'robots.txt', 'sitemap.xml']);
+app.get('/', (req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(path.join(__dirname, 'index.html')); });
+app.get('/:file', (req, res, next) => {
+  const f = req.params.file;
+  if (!PUBLIC_FILES.has(f)) return next();
+  res.set('Cache-Control', /\.(png|jpg)$/.test(f) ? 'public, max-age=604800' : 'no-cache');
+  res.sendFile(path.join(__dirname, f));
+});
+app.use((req, res) => res.status(404).sendFile(path.join(__dirname, 'index.html')));
 
 // JSON errors (bad JSON, too large) instead of HTML stack traces.
 // eslint-disable-next-line no-unused-vars
